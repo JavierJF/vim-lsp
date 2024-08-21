@@ -137,6 +137,7 @@ function! s:show_floating_window(server_name, request, response) abort
     endif
 
     " Update contents.
+    let l:cur_pos = screenpos(0, line('.'), col('.'))
     let l:doc_win = s:get_doc_win()
     silent! call deletebufline(l:doc_win.get_bufnr(), 1, '$')
     call setbufline(l:doc_win.get_bufnr(), 1, lsp#utils#_split_by_eol(join(l:contents, "\n\n")))
@@ -153,7 +154,7 @@ function! s:show_floating_window(server_name, request, response) abort
         \   'maxwidth': l:maxwidth,
         \   'maxheight': float2nr(&lines * 0.4),
         \ })
-    let l:pos = s:compute_position(l:size)
+    let l:pos = s:compute_position(l:size, l:cur_pos)
     if empty(l:pos)
         call s:close_floating_window()
         return
@@ -260,8 +261,8 @@ function! s:get_doc_win() abort
     return s:doc_win
 endfunction
 
-function! s:compute_position(size) abort
-    let l:pos = screenpos(0, line('.'), col('.'))
+function! s:compute_position(size, cur_pos) abort
+    let l:pos = a:cur_pos
     if l:pos.row == 0 && l:pos.col == 0
         " workaround for float position
         let l:pos = {'curscol': wincol(), 'row': winline()}

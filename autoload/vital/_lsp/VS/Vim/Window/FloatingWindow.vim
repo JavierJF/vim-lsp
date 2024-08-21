@@ -401,7 +401,7 @@ else
     \   'pos': 'topleft',
     \   'wrap': v:false,
     \   'moved': [0, 0, 0],
-    \   'scrollbar': 0,
+    \   'scrollbar': 1,
     \   'maxwidth': l:style.width,
     \   'maxheight': l:style.height,
     \   'minwidth': l:style.width,
@@ -409,12 +409,14 @@ else
     \   'tabpage': 0,
     \   'firstline': l:style.topline,
     \   'padding': [0, 0, 0, 0],
-    \   'border': has_key(l:style, 'border') ? [1, 1, 1, 1] : [0, 0, 0, 0],
-    \   'borderchars': get(l:style, 'border', []),
+    \   'border': has_key(l:style, 'border') ? [2, 2, 2, 2] : [0, 0, 0, 0],
     \   'fixed': v:true,
     \ }
   endfunction
 endif
+
+" NOTE: Removed from above
+"    \   'borderchars': get(l:style, 'border', []),
 
 "
 " _resolve_origin

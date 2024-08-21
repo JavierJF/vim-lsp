@@ -144,7 +144,7 @@ function! s:show_floating_window(event, managed_user_data) abort
     \     'border': v:true,
     \     'topline': 1,
     \ })
-    call s:Window.do(l:doc_win.get_winid(), { -> s:Markdown.apply() })
+    " call s:Window.do(l:doc_win.get_winid(), { -> s:Markdown.apply() })
 endfunction
 
 function! s:close_floating_window(force) abort
