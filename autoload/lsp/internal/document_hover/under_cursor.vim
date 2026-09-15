@@ -38,6 +38,8 @@ function! lsp#internal#document_hover#under_cursor#do(options) abort
 
     if has_key(a:options, 'server')
         let l:servers = [a:options['server']]
+    elseif !empty(getbufvar(l:bufnr, 'lsp_hover_server', ''))
+        let l:servers = [getbufvar(l:bufnr, 'lsp_hover_server')]
     else
         let l:servers = filter(lsp#get_allowed_servers(), 'lsp#capabilities#has_hover_provider(v:val)')
     endif
@@ -118,6 +120,8 @@ function! s:show_preview_window(server_name, request, response) abort
     setlocal nobuflisted
     setlocal buftype=nofile
     setlocal noswapfile
+    setlocal noreadonly
+    setlocal modifiable
     %d _
     call setline(1, l:lines)
     call s:Window.do(win_getid(), {->s:Markdown.apply()})
@@ -161,8 +165,11 @@ function! s:show_floating_window(server_name, request, response) abort
     endif
 
     execute printf('augroup vim_lsp_hover_close_on_move_%d', bufnr('%'))
+        " vint: -ProhibitAutocmdWithNoGroup
         autocmd!
-        execute printf('autocmd InsertEnter,BufLeave,CursorMoved <buffer> call s:close_floating_window_on_move(%s)', getcurpos())
+        autocmd InsertEnter,BufLeave <buffer> call s:close_floating_window()
+        execute printf('autocmd CursorMoved <buffer> call s:close_floating_window_on_move(%s)', getcurpos())
+        " vint: +ProhibitAutocmdWithNoGroup
     augroup END
 
    " Show popupmenu and apply markdown syntax.

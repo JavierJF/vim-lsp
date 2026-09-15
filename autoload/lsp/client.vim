@@ -246,7 +246,6 @@ function! s:lsp_send(id, opts, type) abort " opts = { id?, method?, result?, par
 
     let l:json = json_encode(l:request)
     let l:payload = 'Content-Length: ' . len(l:json) . "\r\n\r\n" . l:json
-
     call lsp#utils#job#send(a:id, l:payload)
 
     if (a:type == s:send_type_request)
@@ -315,6 +314,20 @@ function! s:native_err_cb(cbctx, channel, response) abort
     endif
 endfunction
 
+function! s:native_exit_cb(cbctx, channel, response) abort
+    if !has_key(a:cbctx, 'ctx') | return | endif
+    let l:ctx = a:cbctx['ctx']
+    if has_key(l:ctx['opts'], 'on_exit')
+        try
+            call l:ctx['opts']['on_exit'](l:ctx['id'], a:response, 'exit')
+        catch
+            call lsp#log('s:on_exit exception', v:exception, v:throwpoint)
+            echom v:exception
+        endtry
+    endif
+    call s:dispose_context(l:ctx['id'])
+endfunction
+
 " public apis {{{
 
 function! lsp#client#start(opts) abort
@@ -324,6 +337,7 @@ function! lsp#client#start(opts) abort
             let l:jobopt = { 'in_mode': 'lsp', 'out_mode': 'lsp', 'noblock': 1,
                 \ 'out_cb': function('s:native_out_cb', [l:cbctx]),
                 \ 'err_cb': function('s:native_err_cb', [l:cbctx]),
+                \ 'exit_cb': function('s:native_exit_cb', [l:cbctx]),
                 \ }
             if has_key(a:opts, 'cwd') | let l:jobopt['cwd'] = a:opts['cwd'] | endif
             if has_key(a:opts, 'env') | let l:jobopt['env'] = a:opts['env'] | endif
@@ -370,6 +384,12 @@ function! lsp#client#send_request(client_id, opts) abort
         let l:ctx['requests'][l:request['id']] = l:request
         if has_key(a:opts, 'on_notification')
             let l:ctx['on_notifications'][l:request['id']] = a:opts['on_notification']
+        endif
+        if get(a:opts, 'sync', 0) !=# 0
+            let l:timeout = get(a:opts, 'sync_timeout', -1)
+            if lsp#utils#_wait(l:timeout, {-> !has_key(l:ctx['requests'], l:request['id'])}, 1) == -1
+                throw 'lsp#client#send_request: timeout'
+            endif
         endif
         let l:ctx['request_sequence'] = l:request['id']
         return l:request['id']
@@ -427,7 +447,26 @@ function! lsp#client#send_response(client_id, opts) abort
         if has_key(a:opts, 'id') | let l:request['id'] = a:opts['id'] | endif
         if has_key(a:opts, 'result') | let l:request['result'] = a:opts['result'] | endif
         if has_key(a:opts, 'error') | let l:request['error'] = a:opts['error'] | endif
-        call ch_sendexpr(l:ctx['channel'], l:request)
+        if has_key(l:request, 'id') && type(l:request['id']) == v:t_string
+            " Vim's lsp channel mode only accepts number ids
+            " so build the frame manually and bypass ch_sendexpr.
+            " see: https://github.com/vim/vim/issues/14091
+            let l:request['jsonrpc'] = '2.0'
+            let l:body = json_encode(l:request)
+            try
+              call ch_sendraw(l:ctx['channel'], 'Content-Length: ' . len(l:body) . "\r\n\r\n" . l:body)
+            catch
+              call lsp#log('lsp#client#send_response error', v:exception, v:throwpoint)
+            endtry
+            return 0
+        endif
+        try
+            call ch_sendexpr(l:ctx['channel'], l:request)
+        catch
+            " vim only supports id as number and fails when string, hence add a try catch: https://github.com/vim/vim/issues/14091
+            call lsp#log('lsp#client#send_response error', v:exception, v:throwpoint,
+                \  has_key(l:request, 'id') && type(l:request['id']) != type(1))
+        endtry
         return 0
     else
         return s:lsp_send(a:client_id, a:opts, s:send_type_response)
